@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Self-Healing DevOps</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  /* Tailwind config for gray-950 */
+  :root { --color-bg: #030712; }
+
+  body { background-color: var(--color-bg); }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulseDot {
+    0%, 100% { opacity: 1;   transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(0.85); }
+  }
+  @keyframes pillGlow {
+    0%, 100% { box-shadow: 0 0 6px rgba(59,130,246,0.4); }
+    50%      { box-shadow: 0 0 18px rgba(59,130,246,0.8); }
+  }
+  @keyframes scanLine {
+    from { background-position: 0 0; }
+    to   { background-position: 0 100%; }
+  }
+  @keyframes barFill {
+    from { width: 0%; }
+  }
+
+  .fade-in    { animation: fadeInUp 0.45s ease forwards; }
+  .pulse-dot  { animation: pulseDot 1.5s infinite ease-in-out; }
+  .pill-glow  { animation: pillGlow 1.2s infinite ease-in-out; }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 14px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    border: 1px solid transparent;
+    transition: background-color 0.4s, color 0.4s, border-color 0.4s, box-shadow 0.4s;
+    white-space: nowrap;
+    cursor: default;
+  }
+  .pill-waiting  { background: #1f2937; color: #6b7280; border-color: #374151; }
+  .pill-running  { background: #1e3a5f; color: #93c5fd; border-color: #3b82f6; }
+  .pill-done     { background: #14532d; color: #86efac; border-color: #22c55e; }
+
+  .panel {
+    background: #111827;
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #6b7280;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .panel-body::-webkit-scrollbar       { width: 3px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+
+  /* Incident cards */
+  .incident-card {
+    border-left: 3px solid;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+  .incident-critical { border-color: #ef4444; background: #1c0a0a; }
+  .incident-high     { border-color: #f97316; background: #1c0f06; }
+  .incident-medium   { border-color: #eab308; background: #1a1600; }
+
+  /* Severity badges */
+  .badge-critical { background: rgba(239,68,68,0.2);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.4);  }
+  .badge-high     { background: rgba(249,115,22,0.2); color: #fdba74; border: 1px solid rgba(249,115,22,0.4); }
+  .badge-medium   { background: rgba(234,179,8,0.2);  color: #fde047; border: 1px solid rgba(234,179,8,0.4);  }
+
+  /* Confidence bar */
+  .conf-bar-fill { animation: barFill 1s ease forwards; }
+
+  /* Code block */
+  .code-block {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 11px;
+    color: #7ee787;
+    word-break: break-all;
+    white-space: pre-wrap;
+  }
+
+  /* Metric cards */
+  .metric-card {
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  /* Placeholder text */
+  .placeholder { color: #374151; font-size: 12px; text-align: center; padding: 24px 0; }
+</style>
+</head>
+<body class="text-gray-100 min-h-screen p-4" style="font-family:'Segoe UI',system-ui,sans-serif;">
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<header class="flex items-center justify-between mb-5">
+  <div>
+    <h1 class="text-xl font-bold text-white tracking-tight">
+      ⚡ AI Self-Healing DevOps
+    </h1>
+    <p class="text-xs text-gray-500 mt-0.5">Powered by Claude AI &nbsp;·&nbsp; OODA Loop Automation</p>
+  </div>
+  <div class="flex items-center gap-2">
+    <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-400 pulse-dot"></span>
+    <span class="text-green-400 text-xs font-bold tracking-wider">SYSTEM ONLINE</span>
+  </div>
+</header>
+
+<!-- ── OODA Status Bar ──────────────────────────────────────────────────────── -->
+<div class="flex items-center gap-2 mb-5 overflow-x-auto pb-1">
+  <div id="pill-OBSERVE"     class="pill pill-waiting">👁 OBSERVE</div>
+  <span class="text-gray-700 text-sm">→</span>
+  <div id="pill-ANALYZE"     class="pill pill-waiting">🔍 ANALYZE</div>
+  <span class="text-gray-700 text-sm">→</span>
+  <div id="pill-DECIDE"      class="pill pill-waiting">🧠 DECIDE</div>
+  <span class="text-gray-700 text-sm">→</span>
+  <div id="pill-ACT"         class="pill pill-waiting">⚡ ACT</div>
+  <span class="text-gray-700 text-sm">→</span>
+  <div id="pill-COMMUNICATE" class="pill pill-waiting">📡 COMMUNICATE</div>
+  <span id="ooda-status" class="ml-auto text-xs text-gray-600 whitespace-nowrap"></span>
+</div>
+
+<!-- ── 2×2 Grid ─────────────────────────────────────────────────────────────── -->
+<div class="grid grid-cols-2 gap-4" style="height: calc(100vh - 170px);">
+
+  <!-- Panel 1: Live Incident Feed -->
+  <div class="panel">
+    <div class="panel-title">📋 Live Incident Feed</div>
+    <div class="panel-body" id="incident-feed">
+      <div class="placeholder">Waiting for incidents…<br>Run <code class="text-blue-400">python trigger_failure.py</code></div>
+    </div>
+  </div>
+
+  <!-- Panel 2: AI Agent Analysis -->
+  <div class="panel">
+    <div class="panel-title">🤖 AI Agent Analysis</div>
+    <div class="panel-body" id="ai-analysis">
+      <div class="placeholder">Awaiting AI classification…</div>
+    </div>
+  </div>
+
+  <!-- Panel 3: Automated Response -->
+  <div class="panel">
+    <div class="panel-title">⚡ Automated Response</div>
+    <div class="panel-body" id="automated-response">
+      <div class="placeholder">No action taken yet…</div>
+    </div>
+  </div>
+
+  <!-- Panel 4: Platform Metrics -->
+  <div class="panel">
+    <div class="panel-title">📊 Platform Metrics</div>
+    <div class="panel-body">
+      <div class="grid grid-cols-2 gap-3 h-full">
+
+        <div class="metric-card">
+          <div class="text-xs text-gray-500 mb-1 uppercase tracking-wider">MTTR</div>
+          <div id="metric-mttr" class="text-3xl font-bold text-white mb-0.5">--</div>
+          <div class="text-xs text-gray-600">Mean Time to Resolve</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="text-xs text-gray-500 mb-1 uppercase tracking-wider">Auto-Resolved</div>
+          <div id="metric-auto" class="text-3xl font-bold text-green-400 mb-0.5">--</div>
+          <div class="text-xs text-gray-600">Of total incidents</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="text-xs text-gray-500 mb-1 uppercase tracking-wider">Incidents Today</div>
+          <div id="metric-count" class="text-3xl font-bold text-blue-400 mb-0.5">0</div>
+          <div class="text-xs text-gray-600">Detected &amp; processed</div>
+        </div>
+
+        <div class="metric-card flex flex-col">
+          <div class="text-xs text-gray-500 mb-1 uppercase tracking-wider">AI Confidence</div>
+          <div id="metric-confidence" class="text-3xl font-bold text-purple-400 mb-1">--</div>
+          <div class="text-xs text-gray-600 mb-2">Latest classification</div>
+          <div class="w-full bg-gray-700 rounded-full h-1.5 mt-auto">
+            <div id="conf-bar"
+                 class="h-1.5 rounded-full bg-green-400 conf-bar-fill"
+                 style="width:0%; transition: width 1s ease;"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div><!-- end grid -->
+
+<!-- ── JavaScript ───────────────────────────────────────────────────────────── -->
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const PAGE_LOAD_TIME = Date.now();
+let lastIncidentId   = null;
+let incidentCount    = 0;
+let autoResolvedCount = 0;
+let animationTimers  = [];
+
+// ── OODA pill helpers ───────────────────────────────────────────────────────
+const PILL_CLASSES = {
+  waiting: 'pill pill-waiting',
+  running: 'pill pill-running pill-glow',
+  done:    'pill pill-done',
+};
+
+function setPill(name, state) {
+  const el = document.getElementById(`pill-${name}`);
+  if (el) el.className = PILL_CLASSES[state] || PILL_CLASSES.waiting;
+}
+
+function resetAllPills() {
+  ['OBSERVE','ANALYZE','DECIDE','ACT','COMMUNICATE'].forEach(p => setPill(p, 'waiting'));
+}
+
+function clearAnimationTimers() {
+  animationTimers.forEach(id => clearTimeout(id));
+  animationTimers = [];
+}
+
+function after(ms, fn) {
+  animationTimers.push(setTimeout(fn, ms));
+}
+
+// ── Rendering helpers ───────────────────────────────────────────────────────
+function esc(str) {
+  return String(str ?? '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function severityClass(sev) {
+  const s = (sev || '').toUpperCase();
+  if (s === 'CRITICAL') return 'incident-critical';
+  if (s === 'HIGH')     return 'incident-high';
+  return 'incident-medium';
+}
+
+function badgeClass(sev) {
+  const s = (sev || '').toUpperCase();
+  if (s === 'CRITICAL') return 'badge-critical';
+  if (s === 'HIGH')     return 'badge-high';
+  return 'badge-medium';
+}
+
+// ── Panel renderers ─────────────────────────────────────────────────────────
+
+function renderIncidentCard(data) {
+  const feed   = document.getElementById('incident-feed');
+  const sev    = (data.severity || 'MEDIUM').toUpperCase();
+  const iid    = data.incident_id || 'N/A';
+  const pipe   = data.pipeline    || data.workflow || 'N/A';
+  const repo   = data.repo        || data.repository || 'N/A';
+  const ts     = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  const cached = data.used_cache
+    ? '<span class="text-yellow-500 text-xs ml-1">(cached)</span>' : '';
+
+  // Remove placeholder if present
+  const ph = feed.querySelector('.placeholder');
+  if (ph) ph.remove();
+
+  const card = document.createElement('div');
+  card.className = `incident-card ${severityClass(sev)} fade-in`;
+  card.innerHTML = `
+    <div class="flex items-center justify-between mb-1.5">
+      <span class="font-bold text-white text-sm">${esc(iid)}</span>
+      <span class="text-xs px-2 py-0.5 rounded-full font-bold ${badgeClass(sev)}">${esc(sev)}</span>
+    </div>
+    <div class="text-gray-300 text-xs">Pipeline: ${esc(pipe)}</div>
+    <div class="text-gray-400 text-xs">Repo: ${esc(repo)}</div>
+    <div class="text-gray-600 text-xs mt-1">${ts}${cached}</div>
+  `;
+
+  feed.insertBefore(card, feed.firstChild);
+}
+
+function renderAIAnalysis(data) {
+  const panel      = document.getElementById('ai-analysis');
+  const conf       = Math.round((data.confidence || 0) * 100);
+  const category   = data.category || 'UNKNOWN';
+  const action     = data.action   || 'N/A';
+  const rootCause  = data.root_cause || 'N/A';
+  const fixTime    = data.estimated_fix_time || 'N/A';
+  const sev        = (data.severity || 'MEDIUM').toUpperCase();
+  const actionColor = action === 'AUTO_FIX' ? 'text-green-400' : 'text-yellow-400';
+
+  panel.innerHTML = `
+    <div class="fade-in space-y-3">
+
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="px-2.5 py-1 bg-blue-900 text-blue-300 border border-blue-700 rounded text-xs font-bold">${esc(category)}</span>
+        <span class="px-2.5 py-1 text-xs rounded-full font-bold ${badgeClass(sev)}">${esc(sev)}</span>
+        <span class="text-gray-500 text-xs ml-auto">${conf}% confidence</span>
+      </div>
+
+      <div>
+        <div class="text-gray-500 text-xs uppercase tracking-wider mb-1">Root Cause</div>
+        <div class="text-gray-200 text-sm leading-relaxed">${esc(rootCause)}</div>
+      </div>
+
+      <div>
+        <div class="flex justify-between items-center text-xs text-gray-500 mb-1">
+          <span class="uppercase tracking-wider">Confidence</span>
+          <span class="text-green-400 font-bold">${conf}%</span>
+        </div>
+        <div class="w-full bg-gray-800 rounded-full h-2">
+          <div class="h-2 rounded-full bg-green-400"
+               style="width:${conf}%; transition: width 1.2s ease;"></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="bg-gray-800 rounded p-2">
+          <div class="text-gray-500 mb-0.5">Decision</div>
+          <div class="font-bold ${actionColor}">${esc(action)}</div>
+        </div>
+        <div class="bg-gray-800 rounded p-2">
+          <div class="text-gray-500 mb-0.5">Fix Time</div>
+          <div class="text-white font-semibold">${esc(fixTime)}</div>
+        </div>
+      </div>
+
+    </div>
+  `;
+}
+
+function renderActionPanel(data) {
+  const panel  = document.getElementById('automated-response');
+  const action = data.action || 'N/A';
+
+  if (action === 'AUTO_FIX') {
+    const cmd = data.fix_command || 'N/A';
+    panel.innerHTML = `
+      <div class="fade-in space-y-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">✅</span>
+          <div>
+            <div class="text-green-400 font-bold text-sm">AUTO_FIX Applied</div>
+            <div class="text-gray-500 text-xs">Fix command executed automatically</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="text-gray-500 text-xs uppercase tracking-wider mb-1.5">Command Executed</div>
+          <div class="code-block">${esc(cmd)}</div>
+        </div>
+
+        <div class="text-xs text-gray-500 space-y-1">
+          <div>⏱ Estimated fix time: <span class="text-gray-300">${esc(data.estimated_fix_time || 'N/A')}</span></div>
+          <div>💬 Slack notification sent</div>
+        </div>
+      </div>
+    `;
+  } else {
+    const steps  = data.investigation_steps || [];
+    const iid    = data.incident_id || 'N/A';
+    const stepsHtml = steps.map((s, i) => `
+      <div class="flex gap-2 text-xs text-gray-300 py-1.5 border-b border-gray-800 last:border-0">
+        <span class="text-yellow-500 font-bold flex-shrink-0">${i + 1}.</span>
+        <span>${esc(s)}</span>
+      </div>
+    `).join('');
+
+    panel.innerHTML = `
+      <div class="fade-in space-y-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🎫</span>
+          <div>
+            <div class="text-yellow-400 font-bold text-sm">GitHub Issue Created</div>
+            <div class="text-gray-500 text-xs">Human review required</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="text-gray-500 text-xs uppercase tracking-wider mb-1.5">Investigation Steps</div>
+          <div class="bg-gray-800 rounded-lg px-3 py-1">${stepsHtml || '<div class="text-gray-600 text-xs py-2">No steps provided</div>'}</div>
+        </div>
+
+        <div class="text-xs text-gray-500 space-y-1">
+          <div>🐙 GitHub Issue: <span class="text-gray-300">[AI-DEVOPS] ${esc(data.category)}: ${esc((data.root_cause || '').substring(0, 50))}</span></div>
+          <div>💬 Slack notification sent to team</div>
+        </div>
+      </div>
+    `;
+  }
+}
+
+function updateMetrics(data) {
+  const mttrSec  = Math.round((Date.now() - PAGE_LOAD_TIME) / 1000);
+  const autoPct  = incidentCount > 0
+    ? Math.round((autoResolvedCount / incidentCount) * 100) : 0;
+  const conf     = Math.round((data.confidence || 0) * 100);
+
+  document.getElementById('metric-mttr').textContent       = `${mttrSec}s`;
+  document.getElementById('metric-auto').textContent       = `${autoPct}%`;
+  document.getElementById('metric-count').textContent      = incidentCount;
+  document.getElementById('metric-confidence').textContent = `${conf}%`;
+  document.getElementById('conf-bar').style.width          = `${conf}%`;
+}
+
+// ── New incident handler ────────────────────────────────────────────────────
+function handleNewIncident(data) {
+  clearAnimationTimers();
+  resetAllPills();
+
+  incidentCount++;
+  if (data.action === 'AUTO_FIX') autoResolvedCount++;
+
+  // t=0 — OBSERVE done, incident card visible
+  setPill('OBSERVE', 'done');
+  renderIncidentCard(data);
+
+  // Reset analysis + action panels to "loading" state
+  document.getElementById('ai-analysis').innerHTML = `
+    <div class="flex items-center gap-3 text-gray-500 text-sm pt-4 fade-in">
+      <svg class="animate-spin w-4 h-4 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+      </svg>
+      Claude is analysing the failure…
+    </div>`;
+  document.getElementById('automated-response').innerHTML =
+    '<div class="placeholder">AI decision pending…</div>';
+
+  // t=500ms — ANALYZE running
+  after(500, () => setPill('ANALYZE', 'running'));
+
+  // t=2000ms — ANALYZE done, DECIDE running, show AI analysis
+  after(2000, () => {
+    setPill('ANALYZE', 'done');
+    setPill('DECIDE',  'running');
+    renderAIAnalysis(data);
+  });
+
+  // t=3000ms — DECIDE done, ACT running
+  after(3000, () => {
+    setPill('DECIDE', 'done');
+    setPill('ACT',    'running');
+  });
+
+  // t=4000ms — ACT done, COMMUNICATE running, show action + update metrics
+  after(4000, () => {
+    setPill('ACT',         'done');
+    setPill('COMMUNICATE', 'running');
+    renderActionPanel(data);
+    updateMetrics(data);
+  });
+
+  // t=5000ms — COMMUNICATE done
+  after(5000, () => {
+    setPill('COMMUNICATE', 'done');
+    document.getElementById('ooda-status').textContent =
+      `✓ Cycle complete in ${Math.round((Date.now() - PAGE_LOAD_TIME) / 1000)}s`;
+  });
+}
+
+// ── Polling loop ────────────────────────────────────────────────────────────
+async function pollState() {
+  try {
+    const resp = await fetch('http://localhost:5002/state', { cache: 'no-store' });
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    if (!data || !data.incident_id) return;
+    if (data.incident_id === lastIncidentId) return;
+
+    lastIncidentId = data.incident_id;
+    handleNewIncident(data);
+  } catch (_) {
+    // Silently retry — services may not be up yet
+  }
+}
+
+setInterval(pollState, 1000);
+pollState(); // Immediate first call
+</script>
+
+</body>
+</html>

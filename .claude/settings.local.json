@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd D:/AIWorkshop/-AiNativeselfhealdevops-aiops && python -c \"\nimport ast, sys\nfiles = ['webhook_receiver.py', 'ai_agent.py', 'integrations.py', 'demo_trigger.py']\nfor f in files:\n    try:\n        ast.parse\\(open\\(f, encoding='utf-8'\\).read\\(\\)\\)\n        print\\(f'SYNTAX OK: {f}'\\)\n    except SyntaxError as e:\n        print\\(f'SYNTAX ERROR in {f}: {e}'\\)\n        sys.exit\\(1\\)\n\")"
+    ]
+  }
+}
